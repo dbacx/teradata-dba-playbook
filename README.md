@@ -49,7 +49,7 @@ Pull requests bienvenidos. Si tienes queries probadas en producción, ábrelas c
 ## 👤 Autor
 
 Ricardo Enciso — DBA Senior Teradata | Colombia  
-[LinkedIn](https://linkedin.com) · [GitHub](https://github.com)
+[LinkedIn](https://www.linkedin.com/in/raeb/) · [GitHub](https://github.com/dbacx)
 
 ---
 
