@@ -1,0 +1,149 @@
+# 03 — Space Management
+
+## Tipos de espacio en Teradata
+
+| Tipo | Qué es | Quién lo consume |
+|------|--------|-----------------|
+| **Perm Space** | Espacio para datos permanentes | Tablas, índices |
+| **Spool Space** | Espacio temporal para resultados intermedios de queries | Sesiones activas |
+| **Temp Space** | Espacio para tablas temporales (`CREATE VOLATILE TABLE`) | Sesiones activas |
+| **DBC Space** | Espacio del diccionario de datos | Sistema |
+
+> El espacio se asigna a nivel de **usuario/base de datos** y se comparte hacia abajo en la jerarquía.
+
+---
+
+## Queries de diagnóstico
+
+### Ver espacio usado y disponible por base de datos
+```sql
+SELECT
+    DatabaseName,
+    SUM(MaxPerm) / 1024 / 1024 / 1024         AS max_perm_gb,
+    SUM(CurrentPerm) / 1024 / 1024 / 1024      AS used_perm_gb,
+    SUM(MaxPerm - CurrentPerm) / 1024 / 1024 / 1024 AS free_perm_gb,
+    CAST(SUM(CurrentPerm) * 100.0 / NULLIFZERO(SUM(MaxPerm)) AS DECIMAL(5,2)) AS pct_used
+FROM DBC.DiskSpaceV
+GROUP BY 1
+ORDER BY used_perm_gb DESC;
+```
+> **Qué validar:** Bases de datos con `pct_used` > 85% → revisar y limpiar o ampliar.
+
+### Ver espacio por tabla (top 20 más grandes)
+```sql
+SELECT TOP 20
+    DatabaseName,
+    TableName,
+    SUM(CurrentPerm) / 1024 / 1024 AS perm_mb,
+    SUM(CurrentPerm) / 1024 / 1024 / 1024 AS perm_gb
+FROM DBC.TableSizeV
+GROUP BY 1, 2
+ORDER BY perm_mb DESC;
+```
+
+### Ver espacio total del sistema
+```sql
+SELECT
+    SUM(MaxPerm) / 1024 / 1024 / 1024       AS total_perm_gb,
+    SUM(CurrentPerm) / 1024 / 1024 / 1024   AS used_perm_gb,
+    SUM(MaxPerm - CurrentPerm) / 1024 / 1024 / 1024 AS free_perm_gb,
+    CAST(SUM(CurrentPerm) * 100.0 / NULLIFZERO(SUM(MaxPerm)) AS DECIMAL(5,2)) AS pct_used
+FROM DBC.DiskSpaceV;
+```
+
+### Ver spool en uso ahora por sesión
+```sql
+SELECT
+    s.UserName,
+    s.SessionNo,
+    s.SpoolUsage / 1024 / 1024 AS spool_mb
+FROM DBC.SessionInfoV s
+WHERE s.SpoolUsage > 0
+ORDER BY spool_mb DESC;
+```
+> **Qué validar:** Sesiones con spool > 10GB son candidatas a revisar — posible query mal escrita.
+
+### Ver límite de spool asignado por usuario
+```sql
+SELECT
+    UserName,
+    SpoolSpace / 1024 / 1024 / 1024 AS spool_max_gb
+FROM DBC.UsersV
+ORDER BY spool_max_gb DESC;
+```
+
+### Ver espacio por AMP (para detectar desbalance de disco)
+```sql
+SELECT
+    Vproc,
+    SUM(MaxPerm) / 1024 / 1024 / 1024       AS max_perm_gb,
+    SUM(CurrentPerm) / 1024 / 1024 / 1024   AS used_perm_gb,
+    CAST(SUM(CurrentPerm) * 100.0 / NULLIFZERO(SUM(MaxPerm)) AS DECIMAL(5,2)) AS pct_used
+FROM DBC.DiskSpaceV
+GROUP BY 1
+ORDER BY pct_used DESC;
+```
+> **Qué validar:** Si un AMP tiene mucho más uso que el promedio → skew o problema de redistribución.
+
+---
+
+## Gestión de espacio
+
+### Ver cuánto perm tiene asignado una base de datos
+```sql
+SELECT
+    DatabaseName,
+    PermSpace / 1024 / 1024 / 1024 AS perm_asignado_gb
+FROM DBC.DatabasesV
+WHERE DatabaseName = 'nombre_base';
+```
+
+### Ampliar perm space a una base de datos
+```sql
+MODIFY DATABASE nombre_base AS PERM = 100000000000; -- en bytes (100 GB)
+```
+
+### Ampliar spool space a un usuario
+```sql
+MODIFY USER nombre_usuario AS SPOOL = 50000000000; -- en bytes (50 GB)
+```
+
+### Ver tablas sin datos (candidatas a limpiar)
+```sql
+SELECT
+    DatabaseName,
+    TableName
+FROM DBC.TableSizeV
+GROUP BY 1, 2
+HAVING SUM(CurrentPerm) = 0
+ORDER BY 1, 2;
+```
+
+### Ver tablas que no se han consultado en 30+ días (requiere DBQL)
+```sql
+SELECT DISTINCT
+    ObjectDatabaseName,
+    ObjectTableName,
+    MAX(CollectTimeStamp) AS ultimo_acceso
+FROM DBC.DBQLObjTbl
+WHERE ObjectType = 'Tab'
+GROUP BY 1, 2
+HAVING MAX(CollectTimeStamp) < CURRENT_DATE - 30
+ORDER BY ultimo_acceso ASC;
+```
+
+---
+
+## Checklist de space management
+
+- [ ] Revisar `pct_used` por base de datos — alertar si > 85%
+- [ ] Identificar las 20 tablas más grandes mensualmente
+- [ ] Validar spool activo cuando hay quejas de performance
+- [ ] Revisar tablas vacías o sin uso para candidatas a archivo/borrado
+- [ ] Verificar que el espacio por AMP esté balanceado
+
+---
+
+## Siguiente módulo
+
+→ [04 — Usuarios, Roles y Seguridad](../04_users_roles_security/README.md)
