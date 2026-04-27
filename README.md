@@ -19,7 +19,8 @@ Guía práctica para DBAs de Teradata: conceptos, queries listas para usar, vali
 | 07 | [Utilidades](./07_utilities/README.md) | FastLoad, BTEQ, TPT, Fastexport |
 | 08 | [Queries de Monitoreo](./08_monitoring_queries/README.md) | ← listas para copiar/pegar |
 | 09 | [Troubleshooting](./09_troubleshooting/README.md) | Casos reales y soluciones |
-
+| 10 | [Automatización (Python/Shell)](./10_automation/README.md) | Scripts de mantenimiento, recolección de estadísticas y reportes | Pendiente
+| 11 | [Teradata to Cloud](./11_cloud_transition/README.md) | Conceptos puente hacia AWS/Azure, Vantage in the Cloud | Pendiente
 ---
 
 ## 🚀 Cómo usar este repo
